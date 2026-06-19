@@ -47,6 +47,7 @@
         var opponent = game.Opponent(playerNumber);
         var isCurrent = game.CurrentPlayerNumber == playerNumber;
         var pendingForMe = game.PendingChoice?.PlayerNumber == playerNumber;
+        var selectedResearch = SelectedResearch(game);
 
         <section class="game-status">
             <div>
@@ -63,6 +64,14 @@
             </div>
             <div class="log latest-log">@game.Log</div>
         </section>
+
+        @if (game.WinnerPlayerNumber is not null)
+        {
+            <section class="victory-panel">
+                <h2>Player @game.WinnerPlayerNumber の勝利</h2>
+                <p>@game.WinReason</p>
+            </section>
+        }
 
         @if (game.PendingChoice is not null)
         {
@@ -181,7 +190,7 @@
                 </div>
             </div>
 
-            <div class="panel">
+            <div class="panel research-panel">
                 <h2>研究可能</h2>
                 <div class="research-list">
                     @foreach (var research in Engine.AvailableResearches(game))
@@ -200,14 +209,12 @@
 
             <div class="panel">
                 <h2>錬成可能</h2>
-                <div class="research-list">
+                <div class="tag-list">
                     @foreach (var research in Engine.CraftableResearches(game))
                     {
-                        <article class="research">
-                            <h3>@research.Name</h3>
-                            <p>@research.RankText / @research.RecipeText</p>
-                            <button disabled="@(!CanAct)" @onclick="() => Craft(research.Id)">錬成</button>
-                        </article>
+                        <button class="tag-button" disabled="@(!CanAct)" @onclick="() => Craft(research.Id)">
+                            @research.Name
+                        </button>
                     }
                 </div>
             </div>
@@ -217,9 +224,30 @@
                 <div class="tag-list">
                     @foreach (var research in game.ResearchDeck.Where(x => x.IsUnlocked))
                     {
-                        <span>@research.Name@(research.IsSealed(game.Turn) ? "【封印中】" : "")</span>
+                        <button class="tag-button @(selectedResearchId == research.Id ? "selected" : "")"
+                                @onclick="() => SelectResearch(research.Id)">
+                            @research.Name@(research.IsSealed(game.Turn) ? "【封印中】" : "")
+                        </button>
                     }
                 </div>
+            </div>
+
+            <div class="panel detail-panel">
+                <h2>研究詳細</h2>
+                @if (selectedResearch is null)
+                {
+                    <p class="muted">研究済みの研究をクリックすると素材を確認できます。</p>
+                }
+                else
+                {
+                    <h3>@selectedResearch.Name</h3>
+                    <p>@selectedResearch.RankText</p>
+                    <p><strong>素材:</strong> @selectedResearch.RecipeText</p>
+                    @if (!string.IsNullOrWhiteSpace(selectedResearch.Description))
+                    {
+                        <p>@selectedResearch.Description</p>
+                    }
+                }
             </div>
         </section>
     }
@@ -238,10 +266,12 @@
     private int playerNumber;
     private string joinCode = "";
     private string status = "";
+    private Guid? selectedResearchId;
 
     private bool CanAct =>
         room is not null &&
         room.State.CurrentPlayerNumber == playerNumber &&
+        room.State.WinnerPlayerNumber is null &&
         room.State.PendingChoice is null;
 
     private void CreateRoom()
@@ -303,6 +333,14 @@
     private void EndTurn() => Engine.EndTurn(room!, playerNumber);
     private void ResolveChoice(Guid selectedId) => Engine.ResolveChoice(room!, playerNumber, selectedId);
     private void CancelChoice() => Engine.CancelChoice(room!, playerNumber);
+    private void SelectResearch(Guid researchId) => selectedResearchId = researchId;
+
+    private ResearchCard? SelectedResearch(GameState game)
+    {
+        return selectedResearchId is null
+            ? null
+            : game.ResearchDeck.FirstOrDefault(x => x.Id == selectedResearchId);
+    }
 
     private IEnumerable<Card> ChoiceCards(GameState game)
     {

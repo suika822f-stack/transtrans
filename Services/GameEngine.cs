@@ -110,6 +110,7 @@ public class GameEngine
             });
 
             game.Log = $"{research.Name} を錬成しました。";
+            CheckWin(game, game.CurrentPlayerNumber);
         });
     }
 
@@ -133,6 +134,7 @@ public class GameEngine
             if (completed)
             {
                 game.CurrentPlayer.Hand.Remove(item);
+                CheckWin(game, playerNumber);
             }
         });
     }
@@ -169,6 +171,7 @@ public class GameEngine
                     player.Hand.Add(stolen);
                     CompleteItemUse(player, item);
                     game.Log = $"{stolen.Name} を奪いました。";
+                    CheckWin(game, playerNumber);
                     break;
 
                 case PendingChoiceKind.ObsidianSeal:
@@ -188,6 +191,7 @@ public class GameEngine
                     });
                     CompleteItemUse(player, item);
                     game.Log = $"{created.Name} を手札に加えました。";
+                    CheckWin(game, playerNumber);
                     break;
 
                 case PendingChoiceKind.MossAge:
@@ -488,6 +492,11 @@ public class GameEngine
         lock (room)
         {
             var game = room.State;
+            if (game.WinnerPlayerNumber is not null)
+            {
+                return;
+            }
+
             if (playerNumber != game.CurrentPlayerNumber)
             {
                 return;
@@ -536,4 +545,36 @@ public class GameEngine
         || (env == EnvironmentType.Water && element == ElementType.Water)
         || (env == EnvironmentType.Air && element == ElementType.Air)
         || (env == EnvironmentType.Earth && element == ElementType.Earth);
+
+    private void CheckWin(GameState game, int playerNumber)
+    {
+        if (game.WinnerPlayerNumber is not null)
+        {
+            return;
+        }
+
+        var player = game.Player(playerNumber);
+        var items = player.Hand.OfType<AlchemyItem>().ToList();
+        var upperCompositeCount = items.Count(x => x.Rank == AlchemyRank.UpperComposite);
+        var purificationScore = items.Sum(x => x.Rank switch
+        {
+            AlchemyRank.LowerPurification => 1,
+            AlchemyRank.MiddlePurification => 2,
+            AlchemyRank.UpperPurification => 3,
+            _ => 0
+        });
+
+        if (upperCompositeCount >= 4)
+        {
+            game.WinnerPlayerNumber = playerNumber;
+            game.WinReason = "上級複合錬成物を4つ手札に集めました。";
+            game.Log = $"Player {playerNumber} の勝利: {game.WinReason}";
+        }
+        else if (purificationScore >= 15)
+        {
+            game.WinnerPlayerNumber = playerNumber;
+            game.WinReason = $"純化錬成物を{purificationScore}点分手札に集めました。";
+            game.Log = $"Player {playerNumber} の勝利: {game.WinReason}";
+        }
+    }
 }

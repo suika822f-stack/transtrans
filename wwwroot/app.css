@@ -171,6 +171,18 @@ input {
     border-color: #67a99b;
 }
 
+.victory-panel {
+    background: #f7ead8;
+    border: 2px solid #9b6638;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    padding: 14px;
+}
+
+.victory-panel h2 {
+    color: #6c351c;
+}
+
 .choice-list {
     display: flex;
     flex-wrap: wrap;
@@ -264,11 +276,23 @@ input {
 }
 
 .cauldron-counts span,
-.tag-list span {
+.tag-list span,
+.tag-button {
     border: 1px solid #d0d7d2;
     border-radius: 999px;
     padding: 0.25rem 0.55rem;
     background: #f7f9f8;
+}
+
+.tag-button {
+    color: #263a36;
+    min-height: 0;
+}
+
+.tag-button.selected,
+.tag-button:hover:not(:disabled) {
+    border-color: #1f5b4f;
+    background: #e5f2ee;
 }
 
 .button-grid {
@@ -304,7 +328,7 @@ input {
 
 .research-area {
     display: grid;
-    grid-template-columns: repeat(4, minmax(240px, 1fr));
+    grid-template-columns: minmax(220px, 0.9fr) minmax(520px, 1.8fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr) minmax(240px, 1fr);
     align-items: start;
     gap: 14px;
     margin-top: 14px;
@@ -336,12 +360,41 @@ input {
     margin-top: 10px;
 }
 
+.research-panel .research-list {
+    grid-template-columns: repeat(5, minmax(92px, 1fr));
+}
+
 .research {
     border: 1px solid #d0d7d2;
     border-radius: 6px;
-    padding: 10px;
+    padding: 8px;
     display: grid;
-    gap: 6px;
+    gap: 4px;
+}
+
+.research-panel .research {
+    min-height: 118px;
+}
+
+.research-panel .research h3 {
+    font-size: 0.92rem;
+}
+
+.research-panel .research p {
+    font-size: 0.74rem;
+    line-height: 1.25;
+}
+
+.research-panel .research button {
+    padding: 0.32rem 0.42rem;
+}
+
+.detail-panel {
+    min-height: 160px;
+}
+
+.muted {
+    color: #6b7773;
 }
 
 #blazor-error-ui {
@@ -370,6 +423,10 @@ input {
     .research-area,
     .choice-panel {
         grid-template-columns: 1fr;
+    }
+
+    .research-panel .research-list {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
     }
 
     .button-grid {

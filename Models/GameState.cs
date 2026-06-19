@@ -31,6 +31,8 @@ public class GameState
     public int SulfurTurn { get; set; }
     public int MistTurn { get; set; }
     public bool SkipAgingThisTurn { get; set; }
+    public int? WinnerPlayerNumber { get; set; }
+    public string WinReason { get; set; } = "";
 
     public PendingChoice? PendingChoice { get; set; }
 
