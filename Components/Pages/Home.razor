@@ -1,0 +1,369 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject GameRoomService Rooms
+@inject GameEngine Engine
+
+<PageTitle>TransTrans</PageTitle>
+
+<div class="shell">
+    <header class="app-header">
+        <div>
+            <h1>TransTrans</h1>
+            <p>ルームコードで2人対戦できる錬成カードゲーム</p>
+        </div>
+        @if (room is not null)
+        {
+            <div class="room-badge">
+                <span>Room</span>
+                <strong>@room.Code</strong>
+            </div>
+        }
+    </header>
+
+    @if (room is null)
+    {
+        <section class="lobby">
+            <div class="lobby-panel">
+                <h2>対戦を始める</h2>
+                <div class="lobby-actions">
+                    <button class="primary" @onclick="CreateRoom">ルーム作成</button>
+                    <div class="join-row">
+                        <input @bind="joinCode" placeholder="ルームコード" maxlength="4" />
+                        <button @onclick="JoinRoom">参加</button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(status))
+                {
+                    <p class="status">@status</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        var game = room.State;
+        var me = game.Player(playerNumber);
+        var opponent = game.Opponent(playerNumber);
+        var isCurrent = game.CurrentPlayerNumber == playerNumber;
+        var pendingForMe = game.PendingChoice?.PlayerNumber == playerNumber;
+
+        <section class="game-status">
+            <div>
+                <span>あなた</span>
+                <strong>Player @playerNumber</strong>
+            </div>
+            <div>
+                <span>現在のターン</span>
+                <strong>Turn @game.Turn / @game.CurrentPlayer.Name</strong>
+            </div>
+            <div>
+                <span>状態</span>
+                <strong>@(isCurrent ? "あなたの番" : "相手の番")</strong>
+            </div>
+            <div class="log">@game.Log</div>
+        </section>
+
+        @if (game.PendingChoice is not null)
+        {
+            <section class="choice-panel @(pendingForMe ? "active" : "")">
+                <div>
+                    <h2>@game.PendingChoice.Message</h2>
+                    <p>@(pendingForMe ? "選択してください。" : "相手の選択待ちです。")</p>
+                </div>
+                @if (pendingForMe)
+                {
+                    <div class="choice-list">
+                        @foreach (var choice in ChoiceCards(game))
+                        {
+                            <button @onclick="() => ResolveChoice(choice.Id)">@choice.Name</button>
+                        }
+                        @foreach (var choice in ChoiceResearches(game))
+                        {
+                            <button @onclick="() => ResolveChoice(choice.Id)">
+                                @choice.Name
+                                <small>@choice.RankText / @choice.RecipeText</small>
+                            </button>
+                        }
+                        <button class="ghost" @onclick="CancelChoice">キャンセル</button>
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="board">
+            <aside class="panel">
+                <h2>相手</h2>
+                <div class="meter">
+                    <span>エリクサー</span>
+                    <strong>@opponent.Elixir</strong>
+                </div>
+                <div class="card-grid compact">
+                    @foreach (var card in opponent.Hand)
+                    {
+                        <div class="card opponent-card">
+                            <strong>@card.Name</strong>
+                        </div>
+                    }
+                </div>
+            </aside>
+
+            <main class="center-board">
+                <section class="panel cauldron">
+                    <div class="panel-title">
+                        <h2>共通大釜</h2>
+                        <span>@EnvironmentText(game.Cauldron.Environment)</span>
+                    </div>
+                    <div class="cauldron-counts">
+                        <span>火 @ElementCount(game, ElementType.Fire)</span>
+                        <span>水 @ElementCount(game, ElementType.Water)</span>
+                        <span>風 @ElementCount(game, ElementType.Air)</span>
+                        <span>土 @ElementCount(game, ElementType.Earth)</span>
+                    </div>
+                    <div class="card-grid">
+                        @foreach (var card in game.Cauldron.Cards)
+                        {
+                            <div class="card cauldron-card @(card.IsReady ? "ready" : "aging")">
+                                <strong>@card.Name</strong>
+                                <small>@(card.IsReady ? "熟成済み" : "未熟成")</small>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <section class="panel gather">
+                    <h2>採取</h2>
+                    <div class="button-grid">
+                        @foreach (var element in Elements)
+                        {
+                            <button disabled="@(!CanAct)" @onclick="() => Take(element)">
+                                @ElementName(element)
+                                <small>@Engine.GetGatherCost(game, element)</small>
+                            </button>
+                        }
+                    </div>
+                </section>
+            </main>
+
+            <aside class="panel">
+                <h2>あなた</h2>
+                <div class="meter">
+                    <span>エリクサー</span>
+                    <strong>@me.Elixir</strong>
+                </div>
+                <div class="card-grid hand">
+                    @foreach (var card in me.Hand)
+                    {
+                        <div class="card hand-card">
+                            <strong>@card.Name</strong>
+                            <small>@CardTypeText(card)</small>
+                            @if (card.CanUse)
+                            {
+                                <button disabled="@(!CanAct)" @onclick="() => Use(card.Id)">使用</button>
+                            }
+                            @if (card.CanPutIntoCauldron)
+                            {
+                                <button disabled="@(!CanAct)" @onclick="() => PutIntoCauldron(card.Id)">大釜へ</button>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="end-turn" disabled="@(!CanAct)" @onclick="EndTurn">ターン終了</button>
+            </aside>
+        </section>
+
+        <section class="research-area">
+            <div class="panel">
+                <h2>研究可能</h2>
+                <div class="research-list">
+                    @foreach (var research in Engine.AvailableResearches(game))
+                    {
+                        <article class="research">
+                            <h3>@research.Name</h3>
+                            <p>@research.RankText / @research.RecipeText</p>
+                            <p>@research.Description</p>
+                            <button disabled="@(!CanAct)" @onclick="() => Research(research.Id)">
+                                研究 @Engine.GetResearchCost(game, research)
+                            </button>
+                        </article>
+                    }
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>錬成可能</h2>
+                <div class="research-list">
+                    @foreach (var research in Engine.CraftableResearches(game))
+                    {
+                        <article class="research">
+                            <h3>@research.Name</h3>
+                            <p>@research.RankText / @research.RecipeText</p>
+                            <button disabled="@(!CanAct)" @onclick="() => Craft(research.Id)">錬成</button>
+                        </article>
+                    }
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>研究済み</h2>
+                <div class="tag-list">
+                    @foreach (var research in game.ResearchDeck.Where(x => x.IsUnlocked))
+                    {
+                        <span>@research.Name@(research.IsSealed(game.Turn) ? "【封印中】" : "")</span>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly ElementType[] Elements =
+    [
+        ElementType.Fire,
+        ElementType.Water,
+        ElementType.Air,
+        ElementType.Earth
+    ];
+
+    private GameRoom? room;
+    private int playerNumber;
+    private string joinCode = "";
+    private string status = "";
+
+    private bool CanAct =>
+        room is not null &&
+        room.State.CurrentPlayerNumber == playerNumber &&
+        room.State.PendingChoice is null;
+
+    private void CreateRoom()
+    {
+        room = Rooms.CreateRoom();
+        playerNumber = Rooms.Join(room);
+        Subscribe();
+        status = "";
+    }
+
+    private void JoinRoom()
+    {
+        var target = Rooms.GetRoom(joinCode);
+        if (target is null)
+        {
+            status = "ルームが見つかりません。";
+            return;
+        }
+
+        var seat = Rooms.Join(target);
+        if (seat == 0)
+        {
+            status = "そのルームは満席です。";
+            return;
+        }
+
+        room = target;
+        playerNumber = seat;
+        Subscribe();
+        status = "";
+    }
+
+    private void Subscribe()
+    {
+        if (room is not null)
+        {
+            room.Changed += OnRoomChanged;
+        }
+    }
+
+    private void OnRoomChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Take(ElementType element) => Engine.TakeElement(room!, playerNumber, element);
+    private void PutIntoCauldron(Guid cardId) => Engine.PutIntoCauldron(room!, playerNumber, cardId);
+    private void Research(Guid researchId) => Engine.Research(room!, playerNumber, researchId);
+    private void Craft(Guid researchId) => Engine.Craft(room!, playerNumber, researchId);
+    private void Use(Guid itemId) => Engine.UseItem(room!, playerNumber, itemId);
+    private void EndTurn() => Engine.EndTurn(room!, playerNumber);
+    private void ResolveChoice(Guid selectedId) => Engine.ResolveChoice(room!, playerNumber, selectedId);
+    private void CancelChoice() => Engine.CancelChoice(room!, playerNumber);
+
+    private IEnumerable<Card> ChoiceCards(GameState game)
+    {
+        var pending = game.PendingChoice;
+        if (pending is null)
+        {
+            return [];
+        }
+
+        return pending.Kind switch
+        {
+            PendingChoiceKind.ThunderSteal => game.Opponent(playerNumber).Hand.Where(x => pending.CandidateIds.Contains(x.Id)),
+            PendingChoiceKind.MossAge => game.Cauldron.Cards.Where(x => pending.CandidateIds.Contains(x.Id)),
+            _ => []
+        };
+    }
+
+    private IEnumerable<ResearchCard> ChoiceResearches(GameState game)
+    {
+        var pending = game.PendingChoice;
+        if (pending is null)
+        {
+            return [];
+        }
+
+        return pending.Kind switch
+        {
+            PendingChoiceKind.RevealResearch
+                or PendingChoiceKind.ObsidianSeal
+                or PendingChoiceKind.ClayCreate
+                or PendingChoiceKind.PotteryCreate
+                => game.ResearchDeck.Where(x => pending.CandidateIds.Contains(x.Id)),
+            _ => []
+        };
+    }
+
+    private static int ElementCount(GameState game, ElementType element) =>
+        game.Cauldron.Cards.OfType<ElementCard>().Count(x => x.Element == element);
+
+    private static string ElementName(ElementType element) => element switch
+    {
+        ElementType.Fire => "火",
+        ElementType.Water => "水",
+        ElementType.Air => "風",
+        ElementType.Earth => "土",
+        _ => ""
+    };
+
+    private static string EnvironmentText(EnvironmentType env) => env switch
+    {
+        EnvironmentType.Fire => "火環境",
+        EnvironmentType.Water => "水環境",
+        EnvironmentType.Air => "風環境",
+        EnvironmentType.Earth => "土環境",
+        _ => "通常環境"
+    };
+
+    private static string CardTypeText(Card card) => card switch
+    {
+        ElementCard element => ElementName(element.Element),
+        AlchemyItem item => item.Rank switch
+        {
+            AlchemyRank.LowerComposite => "下級複合",
+            AlchemyRank.UpperComposite => "上級複合",
+            AlchemyRank.LowerPurification => "下級純化",
+            AlchemyRank.MiddlePurification => "中級純化",
+            AlchemyRank.UpperPurification => "上級純化",
+            _ => item.Rank.ToString()
+        },
+        _ => ""
+    };
+
+    public void Dispose()
+    {
+        if (room is not null)
+        {
+            room.Changed -= OnRoomChanged;
+        }
+    }
+}
