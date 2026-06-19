@@ -7,7 +7,23 @@ public class GameState
     public Cauldron Cauldron { get; set; } = new();
     public List<ResearchCard> ResearchDeck { get; set; } = [];
     public int Turn { get; set; } = 1;
-    public string Log { get; set; } = "ゲームを開始しました。";
+    private string log = "ゲームを開始しました。";
+    public string Log
+    {
+        get => log;
+        set
+        {
+            log = value;
+            LogEntries.Insert(0, $"Turn {Turn}: {value}");
+
+            if (LogEntries.Count > 80)
+            {
+                LogEntries.RemoveRange(80, LogEntries.Count - 80);
+            }
+        }
+    }
+
+    public List<string> LogEntries { get; set; } = ["Turn 1: ゲームを開始しました。"];
 
     public int CrystalBonusTurn { get; set; }
     public int SwampTurn { get; set; }

@@ -151,6 +151,10 @@ input {
     color: #ffffff;
 }
 
+.latest-log {
+    min-height: 100%;
+}
+
 .choice-panel {
     display: grid;
     grid-template-columns: minmax(240px, 1fr) 3fr;
@@ -281,6 +285,15 @@ input {
     padding: 0.35rem 0.45rem;
 }
 
+.hand-card.clickable {
+    cursor: pointer;
+}
+
+.hand-card.clickable:hover {
+    border-color: #1f5b4f;
+    background: #eef8f5;
+}
+
 .end-turn {
     width: 100%;
     margin-top: 14px;
@@ -291,10 +304,30 @@ input {
 
 .research-area {
     display: grid;
-    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    grid-template-columns: repeat(4, minmax(240px, 1fr));
     align-items: start;
     gap: 14px;
     margin-top: 14px;
+}
+
+.action-log {
+    max-height: 420px;
+    overflow: hidden;
+}
+
+.log-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    max-height: 350px;
+    overflow: auto;
+}
+
+.log-list p {
+    border-bottom: 1px solid #e2e8e5;
+    padding-bottom: 6px;
+    color: #34423f;
+    font-size: 0.9rem;
 }
 
 .research-list {

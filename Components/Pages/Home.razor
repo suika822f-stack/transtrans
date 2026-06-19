@@ -61,7 +61,7 @@
                 <span>状態</span>
                 <strong>@(isCurrent ? "あなたの番" : "相手の番")</strong>
             </div>
-            <div class="log">@game.Log</div>
+            <div class="log latest-log">@game.Log</div>
         </section>
 
         @if (game.PendingChoice is not null)
@@ -154,16 +154,14 @@
                 <div class="card-grid hand">
                     @foreach (var card in me.Hand)
                     {
-                        <div class="card hand-card">
+                        <div class="card hand-card @(card.CanPutIntoCauldron ? "clickable" : "")"
+                             title="@(card.CanPutIntoCauldron ? "クリックで大釜に入れる" : "")"
+                             @onclick="() => OnHandCardClicked(card)">
                             <strong>@card.Name</strong>
                             <small>@CardTypeText(card)</small>
                             @if (card.CanUse)
                             {
-                                <button disabled="@(!CanAct)" @onclick="() => Use(card.Id)">使用</button>
-                            }
-                            @if (card.CanPutIntoCauldron)
-                            {
-                                <button disabled="@(!CanAct)" @onclick="() => PutIntoCauldron(card.Id)">大釜へ</button>
+                                <button disabled="@(!CanAct)" @onclick="() => Use(card.Id)" @onclick:stopPropagation>使用</button>
                             }
                         </div>
                     }
@@ -173,6 +171,16 @@
         </section>
 
         <section class="research-area">
+            <div class="panel action-log">
+                <h2>操作ログ</h2>
+                <div class="log-list">
+                    @foreach (var entry in game.LogEntries)
+                    {
+                        <p>@entry</p>
+                    }
+                </div>
+            </div>
+
             <div class="panel">
                 <h2>研究可能</h2>
                 <div class="research-list">
@@ -281,6 +289,14 @@
 
     private void Take(ElementType element) => Engine.TakeElement(room!, playerNumber, element);
     private void PutIntoCauldron(Guid cardId) => Engine.PutIntoCauldron(room!, playerNumber, cardId);
+    private void OnHandCardClicked(Card card)
+    {
+        if (card.CanPutIntoCauldron && CanAct)
+        {
+            PutIntoCauldron(card.Id);
+        }
+    }
+
     private void Research(Guid researchId) => Engine.Research(room!, playerNumber, researchId);
     private void Craft(Guid researchId) => Engine.Craft(room!, playerNumber, researchId);
     private void Use(Guid itemId) => Engine.UseItem(room!, playerNumber, itemId);
