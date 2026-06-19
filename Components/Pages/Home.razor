@@ -12,14 +12,47 @@
             <h1>TransTrans</h1>
             <p>ルームコードで2人対戦できる錬成カードゲーム</p>
         </div>
-        @if (room is not null)
-        {
-            <div class="room-badge">
-                <span>Room</span>
-                <strong>@room.Code</strong>
-            </div>
-        }
+        <div class="header-actions">
+            <button class="secondary" @onclick="ToggleAlchemyTree">錬成ツリー</button>
+            @if (room is not null)
+            {
+                <div class="room-tools">
+                    <button class="secondary" @onclick="LeaveRoom">戻る</button>
+                    <div class="room-badge">
+                        <span>Room</span>
+                        <strong>@room.Code</strong>
+                    </div>
+                </div>
+            }
+        </div>
     </header>
+
+    @if (showAlchemyTree)
+    {
+        <section class="tree-overlay">
+            <div class="tree-panel">
+                <div class="tree-header">
+                    <div>
+                        <h2>錬成ツリー</h2>
+                        <p>すべての錬成物、素材、研究コスト、効果を確認できます。</p>
+                    </div>
+                    <button class="secondary" @onclick="ToggleAlchemyTree">閉じる</button>
+                </div>
+                <div class="tree-grid">
+                    @foreach (var research in AllResearches())
+                    {
+                        <article class="tree-item">
+                            <h3>@research.Name</h3>
+                            <p>@research.RankText</p>
+                            <p><strong>素材:</strong> @research.RecipeText</p>
+                            <p><strong>研究コスト:</strong> @research.Cost</p>
+                            <p><strong>効果:</strong> @(string.IsNullOrWhiteSpace(research.Description) ? "なし" : research.Description)</p>
+                        </article>
+                    }
+                </div>
+            </div>
+        </section>
+    }
 
     @if (room is null)
     {
@@ -267,6 +300,7 @@
     private string joinCode = "";
     private string status = "";
     private Guid? selectedResearchId;
+    private bool showAlchemyTree;
 
     private bool CanAct =>
         room is not null &&
@@ -302,6 +336,26 @@
         playerNumber = seat;
         Subscribe();
         status = "";
+    }
+
+    private void LeaveRoom()
+    {
+        if (room is not null)
+        {
+            room.Changed -= OnRoomChanged;
+        }
+
+        room = null;
+        playerNumber = 0;
+        selectedResearchId = null;
+        status = "";
+    }
+
+    private void ToggleAlchemyTree() => showAlchemyTree = !showAlchemyTree;
+
+    private IEnumerable<ResearchCard> AllResearches()
+    {
+        return room?.State.ResearchDeck ?? ResearchCatalog.CreateDeck();
     }
 
     private void Subscribe()

@@ -70,6 +70,17 @@ h3 {
     padding-bottom: 12px;
 }
 
+.header-actions,
+.room-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.room-tools {
+    justify-content: flex-end;
+}
+
 .room-badge,
 .meter,
 .game-status > div,
@@ -133,6 +144,59 @@ input {
 .primary {
     background: #1f5b4f;
     color: white;
+}
+
+.secondary {
+    background: #f7f9f8;
+}
+
+.tree-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(29, 39, 37, 0.55);
+    padding: 28px;
+}
+
+.tree-panel {
+    width: min(1280px, 100%);
+    max-height: calc(100vh - 56px);
+    margin: 0 auto;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #d0d7d2;
+    border-radius: 8px;
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+.tree-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px;
+    border-bottom: 1px solid #d0d7d2;
+}
+
+.tree-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 10px;
+    overflow: auto;
+    padding: 16px;
+}
+
+.tree-item {
+    border: 1px solid #d0d7d2;
+    border-radius: 6px;
+    padding: 10px;
+    display: grid;
+    gap: 5px;
+}
+
+.tree-item p {
+    color: #46534f;
+    font-size: 0.84rem;
 }
 
 .status {
@@ -423,6 +487,17 @@ input {
     .research-area,
     .choice-panel {
         grid-template-columns: 1fr;
+    }
+
+    .header-actions,
+    .room-tools,
+    .tree-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .tree-overlay {
+        padding: 12px;
     }
 
     .research-panel .research-list {
