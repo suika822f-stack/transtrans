@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: transtrans
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /
