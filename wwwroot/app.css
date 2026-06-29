@@ -178,6 +178,16 @@ input {
     border-bottom: 1px solid #d0d7d2;
 }
 
+.tree-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tree-controls input {
+    width: min(280px, 45vw);
+}
+
 .tree-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -309,6 +319,56 @@ input {
     display: grid;
     gap: 6px;
     align-content: start;
+}
+
+.card.rank-lower,
+.research.rank-lower,
+.tree-item.rank-lower {
+    background: #edf6ea;
+    border-color: #91b58a;
+}
+
+.card.rank-middle,
+.research.rank-middle,
+.tree-item.rank-middle {
+    background: #e8f2f8;
+    border-color: #82a9bc;
+}
+
+.card.rank-upper,
+.research.rank-upper,
+.tree-item.rank-upper {
+    background: #f6ebf1;
+    border-color: #b98ca4;
+}
+
+.cauldron.environment-none {
+    background: #ffffff;
+}
+
+.cauldron.environment-fire {
+    background: #fff0ea;
+    border-color: #cf856b;
+}
+
+.cauldron.environment-water {
+    background: #eaf4fa;
+    border-color: #79a9c2;
+}
+
+.cauldron.environment-air {
+    background: #eef7ef;
+    border-color: #88b28e;
+}
+
+.cauldron.environment-earth {
+    background: #f4efe5;
+    border-color: #ad9872;
+}
+
+.used-label {
+    color: #754960 !important;
+    font-weight: 700;
 }
 
 .opponent-card {
@@ -491,9 +551,14 @@ input {
 
     .header-actions,
     .room-tools,
-    .tree-header {
+    .tree-header,
+    .tree-controls {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .tree-controls input {
+        width: 100%;
     }
 
     .tree-overlay {

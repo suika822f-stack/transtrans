@@ -36,12 +36,15 @@
                         <h2>錬成ツリー</h2>
                         <p>すべての錬成物、素材、研究コスト、効果を確認できます。</p>
                     </div>
-                    <button class="secondary" @onclick="ToggleAlchemyTree">閉じる</button>
+                    <div class="tree-controls">
+                        <input @bind="treeSearch" @bind:event="oninput" placeholder="素材名で検索" />
+                        <button class="secondary" @onclick="ToggleAlchemyTree">閉じる</button>
+                    </div>
                 </div>
                 <div class="tree-grid">
-                    @foreach (var research in AllResearches())
+                    @foreach (var research in FilteredResearches())
                     {
-                        <article class="tree-item">
+                        <article class="tree-item @RankClass(research.Rank)">
                             <h3>@research.Name</h3>
                             <p>@research.RankText</p>
                             <p><strong>素材:</strong> @research.RecipeText</p>
@@ -116,6 +119,13 @@
                 @if (pendingForMe)
                 {
                     <div class="choice-list">
+                        @if (game.PendingChoice.Kind == PendingChoiceKind.SecondPlayerStartingElement)
+                        {
+                            @foreach (var element in Elements)
+                            {
+                                <button @onclick="() => PlaceStartingElement(element)">@ElementName(element)</button>
+                            }
+                        }
                         @foreach (var choice in ChoiceCards(game))
                         {
                             <button @onclick="() => ResolveChoice(choice.Id)">@choice.Name</button>
@@ -127,7 +137,11 @@
                                 <small>@choice.RankText / @choice.RecipeText</small>
                             </button>
                         }
-                        <button class="ghost" @onclick="CancelChoice">キャンセル</button>
+                        @if (game.PendingChoice.Kind is not PendingChoiceKind.RevealResearch
+                            and not PendingChoiceKind.SecondPlayerStartingElement)
+                        {
+                            <button class="ghost" @onclick="CancelChoice">キャンセル</button>
+                        }
                     </div>
                 }
             </section>
@@ -151,7 +165,7 @@
             </aside>
 
             <main class="center-board">
-                <section class="panel cauldron">
+                <section class="panel cauldron @EnvironmentClass(game.Cauldron.Environment)">
                     <div class="panel-title">
                         <h2>共通大釜</h2>
                         <span>@EnvironmentText(game.Cauldron.Environment)</span>
@@ -165,7 +179,7 @@
                     <div class="card-grid">
                         @foreach (var card in game.Cauldron.Cards)
                         {
-                            <div class="card cauldron-card @(card.IsReady ? "ready" : "aging")">
+                            <div class="card cauldron-card @(card.IsReady ? "ready" : "aging") @CardRankClass(card)">
                                 <strong>@card.Name</strong>
                                 <small>@(card.IsReady ? "熟成済み" : "未熟成")</small>
                             </div>
@@ -196,7 +210,7 @@
                 <div class="card-grid hand">
                     @foreach (var card in me.Hand)
                     {
-                        <div class="card hand-card @(card.CanPutIntoCauldron ? "clickable" : "")"
+                        <div class="card hand-card @(card.CanPutIntoCauldron ? "clickable" : "") @CardRankClass(card)"
                              title="@(card.CanPutIntoCauldron ? "クリックで大釜に入れる" : "")"
                              @onclick="() => OnHandCardClicked(card)">
                             <strong>@card.Name</strong>
@@ -204,6 +218,10 @@
                             @if (card.CanUse)
                             {
                                 <button disabled="@(!CanAct)" @onclick="() => Use(card.Id)" @onclick:stopPropagation>使用</button>
+                            }
+                            else if (card is AlchemyItem { Rank: AlchemyRank.UpperComposite, HasBeenUsed: true })
+                            {
+                                <small class="used-label">使用済み</small>
                             }
                         </div>
                     }
@@ -226,9 +244,9 @@
             <div class="panel research-panel">
                 <h2>研究可能</h2>
                 <div class="research-list">
-                    @foreach (var research in Engine.AvailableResearches(game))
+                    @foreach (var research in Engine.AvailableResearches(game, playerNumber))
                     {
-                        <article class="research">
+                        <article class="research @RankClass(research.Rank)">
                             <h3>@research.Name</h3>
                             <p>@research.RankText / @research.RecipeText</p>
                             <p>@research.Description</p>
@@ -243,7 +261,7 @@
             <div class="panel">
                 <h2>錬成可能</h2>
                 <div class="tag-list">
-                    @foreach (var research in Engine.CraftableResearches(game))
+                    @foreach (var research in Engine.CraftableResearches(game, playerNumber))
                     {
                         <button class="tag-button" disabled="@(!CanAct)" @onclick="() => Craft(research.Id)">
                             @research.Name
@@ -255,7 +273,7 @@
             <div class="panel">
                 <h2>研究済み</h2>
                 <div class="tag-list">
-                    @foreach (var research in game.ResearchDeck.Where(x => x.IsUnlocked))
+                    @foreach (var research in me.ResearchDeck.Where(x => x.IsUnlocked))
                     {
                         <button class="tag-button @(selectedResearchId == research.Id ? "selected" : "")"
                                 @onclick="() => SelectResearch(research.Id)">
@@ -301,6 +319,7 @@
     private string status = "";
     private Guid? selectedResearchId;
     private bool showAlchemyTree;
+    private string treeSearch = "";
 
     private bool CanAct =>
         room is not null &&
@@ -353,9 +372,15 @@
 
     private void ToggleAlchemyTree() => showAlchemyTree = !showAlchemyTree;
 
-    private IEnumerable<ResearchCard> AllResearches()
+    private static IEnumerable<ResearchCard> AllResearches() => ResearchCatalog.CreateDeck();
+
+    private IEnumerable<ResearchCard> FilteredResearches()
     {
-        return room?.State.ResearchDeck ?? ResearchCatalog.CreateDeck();
+        var query = treeSearch.Trim();
+        return string.IsNullOrWhiteSpace(query)
+            ? AllResearches()
+            : AllResearches().Where(x => x.Recipe.Any(material =>
+                material.Contains(query, StringComparison.OrdinalIgnoreCase)));
     }
 
     private void Subscribe()
@@ -385,6 +410,7 @@
     private void Craft(Guid researchId) => Engine.Craft(room!, playerNumber, researchId);
     private void Use(Guid itemId) => Engine.UseItem(room!, playerNumber, itemId);
     private void EndTurn() => Engine.EndTurn(room!, playerNumber);
+    private void PlaceStartingElement(ElementType element) => Engine.PlaceStartingElement(room!, playerNumber, element);
     private void ResolveChoice(Guid selectedId) => Engine.ResolveChoice(room!, playerNumber, selectedId);
     private void CancelChoice() => Engine.CancelChoice(room!, playerNumber);
     private void SelectResearch(Guid researchId) => selectedResearchId = researchId;
@@ -393,7 +419,7 @@
     {
         return selectedResearchId is null
             ? null
-            : game.ResearchDeck.FirstOrDefault(x => x.Id == selectedResearchId);
+            : game.Player(playerNumber).ResearchDeck.FirstOrDefault(x => x.Id == selectedResearchId);
     }
 
     private IEnumerable<Card> ChoiceCards(GameState game)
@@ -423,10 +449,11 @@
         return pending.Kind switch
         {
             PendingChoiceKind.RevealResearch
-                or PendingChoiceKind.ObsidianSeal
                 or PendingChoiceKind.ClayCreate
                 or PendingChoiceKind.PotteryCreate
-                => game.ResearchDeck.Where(x => pending.CandidateIds.Contains(x.Id)),
+                => game.Player(playerNumber).ResearchDeck.Where(x => pending.CandidateIds.Contains(x.Id)),
+            PendingChoiceKind.ObsidianSeal
+                => game.Opponent(playerNumber).ResearchDeck.Where(x => pending.CandidateIds.Contains(x.Id)),
             _ => []
         };
     }
@@ -450,6 +477,26 @@
         EnvironmentType.Air => "風環境",
         EnvironmentType.Earth => "土環境",
         _ => "通常環境"
+    };
+
+    private static string EnvironmentClass(EnvironmentType env) => env switch
+    {
+        EnvironmentType.Fire => "environment-fire",
+        EnvironmentType.Water => "environment-water",
+        EnvironmentType.Air => "environment-air",
+        EnvironmentType.Earth => "environment-earth",
+        _ => "environment-none"
+    };
+
+    private static string CardRankClass(Card card) =>
+        card is AlchemyItem item ? RankClass(item.Rank) : "";
+
+    private static string RankClass(AlchemyRank rank) => rank switch
+    {
+        AlchemyRank.LowerComposite or AlchemyRank.LowerPurification => "rank-lower",
+        AlchemyRank.MiddlePurification => "rank-middle",
+        AlchemyRank.UpperComposite or AlchemyRank.UpperPurification or AlchemyRank.PhilosopherStone => "rank-upper",
+        _ => ""
     };
 
     private static string CardTypeText(Card card) => card switch

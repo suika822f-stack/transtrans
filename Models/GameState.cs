@@ -5,7 +5,6 @@ public class GameState
     public PlayerState Player1 { get; set; } = new() { Name = "Player 1" };
     public PlayerState Player2 { get; set; } = new() { Name = "Player 2" };
     public Cauldron Cauldron { get; set; } = new();
-    public List<ResearchCard> ResearchDeck { get; set; } = [];
     public int Turn { get; set; } = 1;
     private string log = "ゲームを開始しました。";
     public string Log

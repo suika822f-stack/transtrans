@@ -3,6 +3,7 @@ namespace TransTrans.Models;
 public enum PendingChoiceKind
 {
     None,
+    SecondPlayerStartingElement,
     RevealResearch,
     ThunderSteal,
     ObsidianSeal,

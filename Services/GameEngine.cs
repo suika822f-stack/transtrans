@@ -59,7 +59,7 @@ public class GameEngine
     {
         Mutate(room, playerNumber, game =>
         {
-            var research = game.ResearchDeck.FirstOrDefault(x => x.Id == researchId);
+            var research = game.CurrentPlayer.ResearchDeck.FirstOrDefault(x => x.Id == researchId);
             if (research is null || research.IsUnlocked || !research.IsRevealed || research.IsSealed(game.Turn))
             {
                 return;
@@ -79,7 +79,7 @@ public class GameEngine
                 game.ResearchDiscountTurn = 0;
             }
 
-            game.Log = $"{research.Name} を研究しました。";
+            game.Log = $"{game.CurrentPlayer.Name} が研究を1件完了しました。";
         });
     }
 
@@ -87,8 +87,8 @@ public class GameEngine
     {
         Mutate(room, playerNumber, game =>
         {
-            var research = game.ResearchDeck.FirstOrDefault(x => x.Id == researchId);
-            if (research is null || !CanCraft(game, research))
+            var research = game.CurrentPlayer.ResearchDeck.FirstOrDefault(x => x.Id == researchId);
+            if (research is null || !CanCraft(game, research, playerNumber))
             {
                 return;
             }
@@ -119,7 +119,7 @@ public class GameEngine
         Mutate(room, playerNumber, game =>
         {
             var item = game.CurrentPlayer.Hand.OfType<AlchemyItem>().FirstOrDefault(x => x.Id == itemId);
-            if (item is null || !item.CanUse)
+            if (item is null || !item.CanUse || item.HasBeenUsed)
             {
                 return;
             }
@@ -133,10 +133,35 @@ public class GameEngine
             var completed = ExecuteItem(game, playerNumber, item);
             if (completed)
             {
-                game.CurrentPlayer.Hand.Remove(item);
+                item.HasBeenUsed = true;
                 CheckWin(game, playerNumber);
             }
         });
+    }
+
+    public void PlaceStartingElement(GameRoom room, int playerNumber, ElementType element)
+    {
+        Mutate(room, playerNumber, game =>
+        {
+            if (game.Turn != 2 ||
+                playerNumber != 2 ||
+                game.CurrentPlayer.HasPlacedStartingElement ||
+                game.PendingChoice?.Kind != PendingChoiceKind.SecondPlayerStartingElement)
+            {
+                return;
+            }
+
+            game.Cauldron.Cards.Add(new ElementCard
+            {
+                Name = ElementName(element),
+                Element = element,
+                IsReady = true
+            });
+            game.CurrentPlayer.HasPlacedStartingElement = true;
+            game.PendingChoice = null;
+            game.Log = "後攻プレイヤーが熟成済みの元素を大釜に加えました。";
+            QueueResearchChoice(game);
+        }, allowPending: true);
     }
 
     public void ResolveChoice(GameRoom room, int playerNumber, Guid selectedId)
@@ -160,9 +185,9 @@ public class GameEngine
             switch (pending.Kind)
             {
                 case PendingChoiceKind.RevealResearch:
-                    var reveal = game.ResearchDeck.First(x => x.Id == selectedId);
+                    var reveal = player.ResearchDeck.First(x => x.Id == selectedId);
                     reveal.IsRevealed = true;
-                    game.Log = $"{reveal.Name} が公開されました。";
+                    game.Log = $"{player.Name} が研究カードを1枚選びました。";
                     break;
 
                 case PendingChoiceKind.ThunderSteal:
@@ -175,7 +200,7 @@ public class GameEngine
                     break;
 
                 case PendingChoiceKind.ObsidianSeal:
-                    var sealedResearch = game.ResearchDeck.First(x => x.Id == selectedId);
+                    var sealedResearch = opponent.ResearchDeck.First(x => x.Id == selectedId);
                     sealedResearch.SealedUntilTurn = game.Turn + 1;
                     CompleteItemUse(player, item);
                     game.Log = $"{sealedResearch.Name} を封印しました。";
@@ -183,7 +208,7 @@ public class GameEngine
 
                 case PendingChoiceKind.ClayCreate:
                 case PendingChoiceKind.PotteryCreate:
-                    var created = game.ResearchDeck.First(x => x.Id == selectedId);
+                    var created = player.ResearchDeck.First(x => x.Id == selectedId);
                     player.Hand.Add(new AlchemyItem
                     {
                         Name = created.Name,
@@ -210,7 +235,9 @@ public class GameEngine
     {
         Mutate(room, playerNumber, game =>
         {
-            if (game.PendingChoice?.PlayerNumber == playerNumber)
+            if (game.PendingChoice?.PlayerNumber == playerNumber &&
+                game.PendingChoice.Kind is not PendingChoiceKind.RevealResearch
+                    and not PendingChoiceKind.SecondPlayerStartingElement)
             {
                 game.PendingChoice = null;
                 game.Log = "選択をキャンセルしました。";
@@ -245,9 +272,10 @@ public class GameEngine
         });
     }
 
-    public bool CanCraft(GameState game, ResearchCard research)
+    public bool CanCraft(GameState game, ResearchCard research, int playerNumber)
     {
-        if (!research.IsUnlocked || research.IsSealed(game.Turn) || game.CurrentPlayer.Elixir < 1)
+        var player = game.Player(playerNumber);
+        if (!research.IsUnlocked || research.IsSealed(game.Turn) || player.Elixir < 1)
         {
             return false;
         }
@@ -267,14 +295,14 @@ public class GameEngine
         return true;
     }
 
-    public IEnumerable<ResearchCard> AvailableResearches(GameState game) =>
-        game.ResearchDeck.Where(x => x.IsRevealed && !x.IsUnlocked && !x.IsSealed(game.Turn));
+    public IEnumerable<ResearchCard> AvailableResearches(GameState game, int playerNumber) =>
+        game.Player(playerNumber).ResearchDeck.Where(x => x.IsRevealed && !x.IsUnlocked && !x.IsSealed(game.Turn));
 
-    public IEnumerable<ResearchCard> CraftableResearches(GameState game) =>
-        game.ResearchDeck.Where(x => CanCraft(game, x));
+    public IEnumerable<ResearchCard> CraftableResearches(GameState game, int playerNumber) =>
+        game.Player(playerNumber).ResearchDeck.Where(x => CanCraft(game, x, playerNumber));
 
     public IEnumerable<ResearchCard> RevealCandidates(GameState game) =>
-        game.ResearchDeck.Where(x => !x.IsRevealed && CanRevealResearch(game, x));
+        game.CurrentPlayer.ResearchDeck.Where(x => !x.IsRevealed && CanRevealResearch(game, x));
 
     public int GetResearchCost(GameState game, ResearchCard research)
     {
@@ -299,7 +327,7 @@ public class GameEngine
     {
         if (item is not null)
         {
-            player.Hand.Remove(item);
+            item.HasBeenUsed = true;
         }
     }
 
@@ -314,7 +342,7 @@ public class GameEngine
 
             case "黒曜石":
                 return SetResearchChoice(game, playerNumber, item, PendingChoiceKind.ObsidianSeal,
-                    game.ResearchDeck.Where(x => x.IsUnlocked).Select(x => x.Id),
+                    game.Opponent(playerNumber).ResearchDeck.Where(x => x.IsUnlocked).Select(x => x.Id),
                     "封印する研究済みカードを選んでください。");
 
             case "雨":
@@ -362,7 +390,7 @@ public class GameEngine
 
             case "粘土":
                 return SetResearchChoice(game, playerNumber, item, PendingChoiceKind.ClayCreate,
-                    game.ResearchDeck
+                    game.CurrentPlayer.ResearchDeck
                         .Where(x => x.Rank is AlchemyRank.LowerComposite or AlchemyRank.LowerPurification)
                         .Select(x => x.Id),
                     "手札に加える下級錬成物を選んでください。");
@@ -386,7 +414,7 @@ public class GameEngine
 
             case "陶器":
                 return SetResearchChoice(game, playerNumber, item, PendingChoiceKind.PotteryCreate,
-                    game.ResearchDeck.Where(x => x.Rank == AlchemyRank.UpperPurification).Select(x => x.Id),
+                    game.CurrentPlayer.ResearchDeck.Where(x => x.Rank == AlchemyRank.UpperPurification).Select(x => x.Id),
                     "手札に加える上級純化錬成物を選んでください。");
 
             default:
@@ -470,6 +498,22 @@ public class GameEngine
             game.SwampTurn = 0;
         }
 
+        if (game.Turn == 2 && !game.Player2.HasPlacedStartingElement)
+        {
+            game.PendingChoice = new PendingChoice
+            {
+                Kind = PendingChoiceKind.SecondPlayerStartingElement,
+                PlayerNumber = 2,
+                Message = "後攻1ターン目: 大釜に加える熟成済み元素を選んでください。"
+            };
+            return;
+        }
+
+        QueueResearchChoice(game);
+    }
+
+    private void QueueResearchChoice(GameState game)
+    {
         var revealCandidates = RevealCandidates(game).Select(x => x.Id).ToList();
         if (revealCandidates.Count > 0)
         {
@@ -514,10 +558,11 @@ public class GameEngine
 
     private bool CanRevealResearch(GameState game, ResearchCard research)
     {
-        var lowerComposite = game.ResearchDeck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.LowerComposite);
-        var lowerPurification = game.ResearchDeck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.LowerPurification);
-        var middlePurification = game.ResearchDeck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.MiddlePurification);
-        var upperComposite = game.ResearchDeck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.UpperComposite);
+        var deck = game.CurrentPlayer.ResearchDeck;
+        var lowerComposite = deck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.LowerComposite);
+        var lowerPurification = deck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.LowerPurification);
+        var middlePurification = deck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.MiddlePurification);
+        var upperComposite = deck.Count(x => x.IsRevealed && x.Rank == AlchemyRank.UpperComposite);
 
         return research.Rank switch
         {

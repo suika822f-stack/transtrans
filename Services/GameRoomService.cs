@@ -53,19 +53,23 @@ public class GameRoomService
 
     private GameState CreateGame()
     {
-        var game = new GameState
+        var game = new GameState();
+        game.Player1.ResearchDeck = ResearchCatalog.CreateDeck();
+        game.Player2.ResearchDeck = ResearchCatalog.CreateDeck();
+        game.PendingChoice = new PendingChoice
         {
-            ResearchDeck = ResearchCatalog.CreateDeck()
+            Kind = PendingChoiceKind.RevealResearch,
+            PlayerNumber = 1,
+            CandidateIds = InitialResearchCandidates(game.Player1),
+            Message = "このターンに公開する研究を選んでください。"
         };
-
-        var first = game.ResearchDeck
-            .FirstOrDefault(x => x.Rank == AlchemyRank.LowerComposite);
-
-        if (first is not null)
-        {
-            first.IsRevealed = true;
-        }
 
         return game;
     }
+
+    private static List<Guid> InitialResearchCandidates(PlayerState player) =>
+        player.ResearchDeck
+            .Where(x => x.Rank is AlchemyRank.LowerComposite or AlchemyRank.LowerPurification)
+            .Select(x => x.Id)
+            .ToList();
 }
